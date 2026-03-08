@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>DLQ Admin Console</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- DataTables CSS + JS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+</head>
+
+<body class="bg-gray-100 p-8">
+
+    <h1 class="text-3xl font-bold mb-6">DLQ Admin Console</h1>
+
+    <div class="mb-4">
+        <button onclick="replaySelected()" class="bg-green-600 text-white px-4 py-2 rounded mr-2">
+            Replay Selected
+        </button>
+        <button onclick="discardSelected()" class="bg-red-600 text-white px-4 py-2 rounded">
+            Discard Selected
+        </button>
+    </div>
+
+    <table id="dlqDataTable" class="display min-w-full bg-white shadow rounded">
+        <thead>
+            <tr>
+                <th>
+                    <input type="checkbox" id="selectAll" />
+                </th>
+                <th>ID</th>
+                <th>Error</th>
+                <th>Retries</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+    </table>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded shadow w-1/2">
+            <h2 class="text-xl font-bold mb-4">History</h2>
+            <div id="historyContent"></div>
+            <button onclick="closeModal()" class="mt-4 bg-gray-600 text-white px-4 py-2 rounded">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <script>
+
+        const API_BASE = "/dlq";
+        let table;
+
+        $(document).ready(function () {
+
+            table = $('#dlqDataTable').DataTable({
+                ajax: {
+                    url: `${API_BASE}/list`,
+                    dataSrc: ''
+                },
+                pageLength: 10,
+                columns: [
+                    {
+                        data: 'id',
+                        orderable: false,
+                        render: function (data) {
+                            return `<input type="checkbox" class="jobCheckbox" value="${data}" />`;
+                        }
+                    },
+                    { data: 'id' },
+                    {
+                        data: 'error_reason',
+                        render: function (data) {
+                            return data ?? "-";
+                        }
+                    },
+                    { data: 'retry_count' },
+                    {
+                        data: 'created_at',
+                        render: function (data) {
+                            return new Date(data).toLocaleString();
+                        }
+                    },
+                    {
+                        data: 'id',
+                        orderable: false,
+                        render: function (data) {
+                            return `<button onclick="viewHistory('${data}')" class="text-blue-600 underline">History</button>`;
+                        }
+                    }
+                ]
+            });
+
+            // Select all checkbox
+            $('#selectAll').on('click', function () {
+                $('.jobCheckbox').prop('checked', this.checked);
+            });
+
+        });
+
+        function getSelectedIds() {
+            return Array.from(document.querySelectorAll(".jobCheckbox:checked"))
+                .map(cb => cb.value);
+        }
+
+        async function replaySelected() {
+            const ids = getSelectedIds();
+            if (!ids.length) return alert("No jobs selected");
+
+            await fetch(`${API_BASE}/replay`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids })
+            });
+
+            alert("Replay triggered");
+            table.ajax.reload();
+        }
+
+        async function discardSelected() {
+            const ids = getSelectedIds();
+            if (!ids.length) return alert("No jobs selected");
+
+            await fetch(`${API_BASE}/discard`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids })
+            });
+
+            alert("Discarded");
+            table.ajax.reload();
+        }
+
+        async function viewHistory(id) {
+            const res = await fetch(`${API_BASE}/${id}/history`);
+            const history = await res.json();
+
+            const content = document.getElementById("historyContent");
+
+            content.innerHTML = history.map(h => `
+    <div class="border-b py-2">
+      <strong>${h.action}</strong>
+      <div class="text-sm text-gray-600">${h.reason || ""}</div>
+      <div class="text-xs text-gray-400">${new Date(h.createdAt).toLocaleString()}</div>
+    </div>
+  `).join("");
+
+            document.getElementById("historyModal").classList.remove("hidden");
+        }
+
+        function closeModal() {
+            document.getElementById("historyModal").classList.add("hidden");
+        }
+
+    </script>
+
+</body>
+
+</html>

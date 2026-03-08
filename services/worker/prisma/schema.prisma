@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model OutboxEvent {
+  id             String   @id @db.Uuid
+  idempotencyKey String   @unique
+  retryCount     Int      @default(0) @map("retry_count")
+  lastError      String?  @map("last_error")
+  eventType      String?  @map("event_type")
+  payload        Json?
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("outbox_events")
+}
+
+
+model Notification {
+  id        String   @id @db.Uuid
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+
+/*
+
+CREATE TABLE dlq_messages (
+   
+    message_id TEXT NOT NULL,
+    correlation_id TEXT,
+
+    -- Queue info
+    source_queue TEXT NOT NULL,
+    routing_key TEXT,
+    exchange_name TEXT,
+
+    -- Message content
+    payload JSONB NOT NULL,
+    headers JSONB,
+
+    -- Failure info
+    error_reason TEXT,
+    error_stack TEXT,
+
+    -- Retry tracking
+    retry_count INT DEFAULT 0,
+    max_retries INT DEFAULT 3,
+
+    -- Status lifecycle
+    status TEXT NOT NULL DEFAULT 'FAILED',
+    -- FAILED | RETRYING | REPLAYED | DISCARDED
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    last_failed_at TIMESTAMP
+);*/
+
+
+model dlq_messages {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  message_id     String
+  correlation_id String?
+
+  source_queue   String
+  routing_key    String?
+  exchange_name  String?
+
+  payload        Json
+  headers        Json?
+
+  histories       Json?    @default("[]")
+  
+  error_reason   String?
+  error_stack    String?
+
+  retry_count    Int      @default(0)
+  max_retries    Int      @default(3)
+  status         String   @default("FAILED")
+
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  last_failed_at DateTime?
+
+  @@map("dlq_messages")
+}

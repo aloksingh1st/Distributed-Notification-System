@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model dlq_messages {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id     String
+  correlation_id String?
+  source_queue   String
+  routing_key    String?
+  exchange_name  String?
+  payload        Json
+  headers        Json?
+  error_reason   String?
+  error_stack    String?
+  retry_count    Int       @default(0)
+  max_retries    Int       @default(3)
+  status         String    @default("FAILED")
+  created_at     DateTime  @default(now())
+  updated_at     DateTime
+  last_failed_at DateTime?
+  histories      Json?     @default("[]")
+}
+
+model notifications {
+  id         String   @id @db.Uuid
+  message    String
+  created_at DateTime @default(now())
+}
+
+model outbox_events {
+  id             String   @id @db.Uuid
+  idempotencyKey String   @unique
+  retry_count    Int      @default(0)
+  last_error     String?
+  event_type     String?
+  payload        Json?
+  status         String   @default("PENDING")
+  created_at     DateTime @default(now())
+}

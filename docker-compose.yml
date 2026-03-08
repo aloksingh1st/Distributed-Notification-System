@@ -1,0 +1,165 @@
+services:
+
+  postgres:
+    container_name: local_postgres
+    image: postgres:16
+    restart: always
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file: .env
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U dev" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:7
+    depends_on:
+      - postgres
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    networks:
+      - backend
+
+  redis:
+    container_name: local_redis
+    image: redis:7
+    restart: always
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    command: redis-server --appendonly yes
+
+  rabbitmq:
+    container_name: local_rabbitmq
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_UI_PORT}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: dev
+      RABBITMQ_DEFAULT_PASS: devpass
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notify-service:
+    container_name: notify_service
+    build: ./services/notify
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    env_file: .env
+    networks:
+      - backend
+
+  worker-service:
+    container_name: worker_service
+    build: ./services/worker
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./services/worker:/app
+      - /app/node_modules
+      - worker_logs:/app/logs
+    env_file: .env
+    networks:
+      - backend
+
+  outbox-worker:
+    container_name: outbox_worker_service
+    build: ./services/worker
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    networks:
+      - backend
+    command: node outboxPublisher.js
+
+  dlq-service:
+    container_name: dlq_service
+    build: ./services/dlq-service
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3008:3008"
+    volumes:
+      - ./services/dlq-service:/app
+      - /app/node_modules
+    env_file: .env
+    networks:
+      - backend
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    depends_on:
+      - worker-service
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  pgadmin_data:
+  worker_logs:
+  grafana_data:
+
+
+networks:
+  backend:

@@ -1,113 +1,250 @@
-# Distributed-Notification-System
+# Distributed Notification System
 
-A scalable event-driven notification infrastructure built using
-RabbitMQ, Redis, and Node.js capable of handling high-throughput
-notification workloads.
+A scalable, event-driven notification infrastructure built using
+**RabbitMQ, Redis, and Node.js**, designed to handle high-throughput
+notification workloads reliably.
 
-# why this system exists
+The system decouples notification ingestion from processing through
+asynchronous messaging, enabling fault tolerance, horizontal
+scalability, and reliable delivery.
 
-Modern applications need to send millions of notifications reliably.
+------------------------------------------------------------------------
 
-However common problems appear:
+# Why This System Exists
 
-• High throughput requirements
-• Message durability
-• Retry & failure handling
-• Multiple notification channels
-• Monitoring and observability
+Modern applications must deliver notifications reliably at scale.\
+As traffic increases, synchronous notification processing introduces
+several challenges:
 
-This project implements a scalable notification infrastructure
-designed to solve these challenges using an event-driven architecture.
+• High throughput requirements\
+• Message durability guarantees\
+• Retry and failure handling\
+• Multiple notification channels\
+• System observability and monitoring
 
-System Architecture
+This project implements a **distributed notification pipeline** that
+addresses these challenges using an **event-driven architecture with
+worker-based processing**.
 
-Diagram will be here in future
+------------------------------------------------------------------------
 
-#Tech Stack
+# System Architecture
 
-Backend: Node.js / Express
-Queue: RabbitMQ
-Cache / Rate limiting: Redis
-Monitoring: Prometheus + Grafana
-Containerization: Docker
+High-level components:
 
-#Features
-✔ Event-driven architecture
-✔ Asynchronous processing
-✔ Retry & dead letter queues
-✔ Worker-based notification processing
-✔ Rate limiting
-✔ Monitoring with Prometheus
-✔ Visualization using Grafana
-✔ Dockerized microservices
+Client\
+↓\
+Notify Service (API)\
+↓\
+Outbox Table (PostgreSQL)\
+↓\
+Outbox Publisher\
+↓\
+RabbitMQ Queue\
+↓\
+Worker Service\
+• Notification Processing\
+• Retry Queue\
+• Dead Letter Queue (DLQ)\
+↓\
+Redis (Caching + Rate Limiting)
+
+Metrics → Prometheus → Grafana
+
+The system follows the **Outbox Pattern** to guarantee reliable message
+publishing and prevent data inconsistency between the database and
+message broker.
+
+------------------------------------------------------------------------
+
+# Tech Stack
+
+Backend\
+Node.js / Express
+
+Message Broker\
+RabbitMQ
+
+Database\
+PostgreSQL
+
+Caching / Rate Limiting\
+Redis
+
+Monitoring\
+Prometheus
+
+Visualization\
+Grafana
+
+Containerization\
+Docker / Docker Compose
+
+------------------------------------------------------------------------
+
+# Key Features
+
+• Event-driven architecture for asynchronous processing\
+• Worker-based notification processing pipeline\
+• Reliable event publishing using the **Outbox Pattern**\
+• Retry handling with **exponential backoff**\
+• Dead Letter Queue (DLQ) for permanent failures\
+• Idempotent consumers to handle duplicate messages\
+• Redis-based distributed rate limiting\
+• Metrics collection with **Prometheus**\
+• Monitoring dashboards using **Grafana**\
+• Containerized microservices for development and deployment
+
+------------------------------------------------------------------------
 
 # Project Structure
 
 services/
-    dlq-service/
+    notify/\
+        index.js\
+        routes/\
+        controllers/\
         config/
-        controllers/
-        routes/
-        dlqConsumer // worker
-        index.js //entry point
 
-    notify/
-        index.js //exposes api 
+    worker/\
+        index.js\
+        outboxPublisher.js\
+        notificationDispatcher.js
 
-    worker/
-        outboxPublisher.js //worker
-        index.js           //main notification logic dispatcher along with idemptotency and circuit breaker
+    dlq-service/\
+        index.js\
+        routes/\
+        controllers/\
+        dlqConsumer/
 
+    docs/\
+        architecture.md\
+        message-flow.md\
+        scaling.md\
+        failure-handling.md
+
+------------------------------------------------------------------------
 
 # How to Run the Project
-   1. Clone the repo
 
-git clone <repo>
+## 1. Clone the repository
 
-2. Start infrastructure
+git clone `<repository-url>`{=html}\
+cd distributed-notification-system
+
+## 2. Start infrastructure
 
 docker compose up
 
+This command launches:
 
-# what happens when a notification is sent
+    • RabbitMQ\
+    • Redis\
+    • PostgreSQL\
+    • Worker services\
+    • Notification API\
+    • Prometheus\
+    • Grafana
 
-    1. Client sends notification request to notify service 
-2. notify service create an entry in outbox table
-3. outboxPublisher publishes the event to rabbitMQ
-4. Queue distributes message to workers
-4. Worker processes notification
-5. If a notification fails , It goes into retry quese with exponential backoff
-6. If the notification fails more than 5 times it goes to dlq and needed manual intervation
-7. Notifications in DLQ can be retries by using the dashboard exposed by dlq-service
-5. Metrics are exported to Prometheus
-6. Grafana dashboards show system health
+------------------------------------------------------------------------
 
-# observablity 
-Prometheus collects metrics like:
+# Notification Processing Flow
 
-• queue size
-• worker processing rate
-• failure counts
-• latency
+1.  Client sends a request to the **Notify Service API**.
 
-Grafana dashboards visualize system performance.
+2.  The service creates a notification entry in the **Outbox Table**.
 
+3.  The **Outbox Publisher** reads pending events and publishes them to
+    RabbitMQ.
 
-screenshots in futer here...
+4.  RabbitMQ distributes messages to available **Worker instances**.
 
+5.  Workers process notifications and attempt delivery.
 
-# how system scales.
+6.  If processing fails:
 
-Horizontal scaling supported through:
+    -   The job is requeued with **exponential backoff**.
 
-• Multiple worker instances
-• RabbitMQ load distribution
-• Containerized deployment
+7.  If a notification fails more than **five retry attempts**:
 
+    -   The message is routed to the **Dead Letter Queue (DLQ)**.
 
-# Architecture Documentations
-  docs/
-  architecture.md
-  message-flow.md
-  scaling.md
-  failure-handling.md
+8.  Messages in the DLQ require **manual inspection or retry** via the
+    DLQ service dashboard.
+
+9.  Processing metrics are exported to **Prometheus**.
+
+10. **Grafana dashboards** visualize system performance and health.
+
+------------------------------------------------------------------------
+
+# Observability
+
+Prometheus collects system metrics including:
+
+• Queue size\
+• Worker processing rate\
+• Notification failure counts\
+• Retry attempts\
+• Processing latency
+
+Grafana dashboards provide real-time insights into system health and
+processing throughput.
+
+------------------------------------------------------------------------
+
+# Failure Handling
+
+The system handles failures using multiple reliability mechanisms:
+
+Retry Queue\
+    Failed notifications are retried with exponential backoff.
+
+Dead Letter Queue\
+    Messages exceeding retry limits are moved to the DLQ for manual
+    inspection.
+
+Idempotent Consumers\
+    Workers ignore duplicate messages using job state verification.
+
+Circuit Breaker\
+    External notification providers are protected with circuit breaker logic
+    to prevent cascading failures.
+
+------------------------------------------------------------------------
+
+# Scalability
+
+The system supports horizontal scaling through:
+
+• Multiple worker instances processing messages in parallel\
+• RabbitMQ load distribution across consumers\
+• Stateless microservices enabling containerized scaling\
+• Redis caching reducing database load
+
+Workers can be scaled independently depending on queue workload.
+
+------------------------------------------------------------------------
+
+# Monitoring Dashboard
+
+Grafana dashboards provide insights into:
+
+    • Queue depth\
+    • Worker throughput\
+    • Failure rates\
+    • Notification latency
+
+    Screenshots will be added in future.
+
+------------------------------------------------------------------------
+
+# Documentation
+
+Detailed system documentation is available in the docs directory.
+
+docs/
+    architecture.md\
+    message-flow.md\
+    scaling.md\
+    failure-handling.md

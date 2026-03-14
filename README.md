@@ -99,7 +99,7 @@ Docker / Docker Compose
 
 # Project Structure
 
-services/
+services/\
     notify/\
         index.js\
         routes/\

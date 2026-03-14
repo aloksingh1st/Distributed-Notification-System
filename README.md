@@ -30,28 +30,6 @@ worker-based processing**.
 
 # System Architecture
 
-High-level components:
-
-Client\
-↓\
-Notify Service (API)\
-↓\
-Outbox Table (PostgreSQL)\
-↓\
-Outbox Publisher\
-↓\
-RabbitMQ Queue\
-↓\
-Worker Service\
-• Notification Processing\
-• Retry Queue\
-• Dead Letter Queue (DLQ)\
-↓\
-Redis (Caching + Rate Limiting)
-
-Metrics → Prometheus → Grafana
-
-
 
 ![System Architecture](docs/architecture-diagram.png)
 
@@ -103,31 +81,54 @@ Docker / Docker Compose
 
 # Project Structure
 
-services/\
-    notify/\
-        index.js\
-        routes/\
-        controllers/\
-        config/
-
-    worker/\
-        index.js\
-        outboxPublisher.js\
-        notificationDispatcher.js
-
-    dlq-service/\
-        index.js\
-        routes/\
-        controllers/\
-        dlqConsumer/
-
-    docs/\
-        architecture.md\
-        message-flow.md\
-        scaling.md\
-        failure-handling.md
+``` distributed-notification-system
+│
+├── services
+│ │
+│ ├── notify
+│ │ ├── index.js
+│ │ ├── routes
+│ │ ├── controllers
+│ │ └── config
+│ │
+│ ├── worker
+│ │ ├── index.js
+│ │ ├── outboxPublisher.js
+│ │ └── notificationDispatcher.js
+│ │
+│ └── dlq-service
+│ ├── index.js
+│ ├── routes
+│ ├── controllers
+│ └── dlqConsumer
+│
+├── docs
+│ ├── architecture.md
+│ ├── message-flow.md
+│ ├── scaling.md
+│ └── failure-handling.md
+│
+├── docker-compose.yml
+└── README.md
+```
 
 ------------------------------------------------------------------------
+
+
+
+### Service Overview
+
+**notify/**  
+API service responsible for receiving notification requests and storing them in the outbox table.
+
+**worker/**  
+Consumes messages from RabbitMQ and processes notification jobs, implementing retry logic, idempotency checks, and circuit breaker protection.
+
+**dlq-service/**  
+Handles messages that exceed retry limits and exposes APIs for inspecting and retrying failed notifications.
+
+**docs/**  
+Contains system design documentation including architecture, message flow, scaling strategy, and failure handling.
 
 # How to Run the Project
 

@@ -51,6 +51,10 @@ Redis (Caching + Rate Limiting)
 
 Metrics → Prometheus → Grafana
 
+
+
+![System Architecture](docs/architecture-diagram.png)
+
 The system follows the **Outbox Pattern** to guarantee reliable message
 publishing and prevent data inconsistency between the database and
 message broker.
